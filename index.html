@@ -166,6 +166,7 @@ body.viewing #app>:not(.vbar):not(.toast):not(.shm){filter:grayscale(1)}
 .vbar .btn{background:#fff;color:#111;border-color:#fff}
 .vbar .btn.pri{background:#f2a066;color:#1a0d02;border-color:#f2a066}
 .dlg p{margin:0}
+.ef{position:absolute;bottom:0;right:3px;font-size:10px;color:var(--muted);line-height:1}
 .cb{position:relative}
 .cb input{width:100%;font-size:15px;padding:9px 10px}
 .cb-list{position:absolute;z-index:30;left:0;right:0;top:calc(100% + 4px);max-height:min(320px,50vh);overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
@@ -496,7 +497,7 @@ function paintScores(){
   });
 }
 function updateScores(){
-  const f=FM[S.format],cfg=S.cfg[S.format],hs=LH[S.loop],rank=[];
+  const f=FM[S.format],cfg=S.cfg[S.format],hs=LH[S.loop],rank=[],IND=[],GRL=[],GRT=[];LASTEFF={};
   const setT=(id,v,cnt)=>{const e=$(id);if(e){e.textContent=v==null?'':v;if(cnt!==undefined)e.classList.toggle('cnt',!!cnt);}};
   AT().forEach(t=>{
     const info=teamInfo(t);if(!info.valid)return;
@@ -514,10 +515,19 @@ function updateScores(){
         const v=av.length?sum(chosen.map(a=>a.pt)):null;
         setT('pp-'+t.id+'-E-'+x,v,v!=null);if(v!=null)teamTot+=v;
       });
-      info.rows.forEach((r,i)=>{setT('tp-'+t.id+'-'+r.p.id,pt[i]);const g=hs.map(x=>parseScore(scoreOf(t.id,r.p.id,x))).filter(v=>typeof v==='number');setT('g-'+t.id+'-'+r.p.id,g.length?sum(g):'');});
+      /* score brut : un « 0 » (balle ramassée) compte par + coups reçus sur le trou + 2 */
+      const gr=info.rows.map((r,i)=>{const eff=hs.map((x,j)=>{const g=parseScore(scoreOf(t.id,r.p.id,x));return typeof g==='number'?g:(g==='x'?parOf(x)+str[i][j]+2:null);});LASTEFF[t.id+':'+r.p.id]=eff;const v=eff.filter(e=>e!=null);return{net:sum(eff.map((e,j)=>e==null?0:e-str[i][j])),tot:sum(v),n:v.length,par:sum(hs.filter((x,j)=>eff[j]!=null).map(x=>parOf(x)))};});
+      info.rows.forEach((r,i)=>{setT('tp-'+t.id+'-'+r.p.id,pt[i]);{const ge=$('g-'+t.id+'-'+r.p.id);if(ge)ge.innerHTML=gr[i].n?'<b>'+gr[i].tot+'</b> <small style="color:var(--muted)">('+(gr[i].tot-gr[i].par>0?'+':'')+(gr[i].tot-gr[i].par)+')</small>':'';}
+        hs.forEach((x,j)=>{const inp=document.querySelector('[data-s="'+t.id+':'+r.p.id+':'+x+'"]');if(!inp)return;const td=inp.parentElement;let sp=td.querySelector('.ef');if(parseScore(scoreOf(t.id,r.p.id,x))==='x'){if(!sp){sp=document.createElement('span');sp.className='ef';td.appendChild(sp);}sp.textContent=LASTEFF[t.id+':'+r.p.id][j];sp.title='Balle ramassée : brut compté = par + coups reçus + 2';}else if(sp)sp.remove();});});
       setT('tp-'+t.id+'-E',teamTot);
-      $('sum-'+t.id).textContent='Total '+(S.mode==='flight'?'du flight':'équipe')+' : '+teamTot+' points';
-      if(S.mode==='flight'&&S.format==='stableford')info.rows.forEach((r,i)=>rank.push({n:r.p.name,pts:pt[i]}));else rank.push({n:t.name,pts:teamTot});
+      const gTot=sum(gr.map(q=>q.tot)),gN=sum(gr.map(q=>q.n)),gPart=gr.some(q=>q.n<hs.length);
+      const brutTxt=(tot,partial,par)=>'brut '+tot+' ('+(tot-par>0?'+':'')+(tot-par)+')'+(partial?' (partiel)':'');
+      const gPar=sum(gr.map(q=>q.par));
+      info.rows.forEach((r,i)=>{if(gr[i].n)GRL.push({n:r.p.name,team:S.mode==='teams'?t.name:'',tot:gr[i].tot,d:gr[i].tot-gr[i].par,net:gr[i].net,dn:gr[i].net-gr[i].par,part:gr[i].n<hs.length});});
+      if(S.mode==='teams'&&gN){const nT=sum(gr.map(q=>q.net));GRT.push({n:t.name,team:'',tot:gTot,d:gTot-gPar,net:nT,dn:nT-gPar,part:gPart});}
+      if(S.mode==='teams')info.rows.forEach((r,i)=>IND.push({n:r.p.name,team:t.name,pts:pt[i],extra:gr[i].n?brutTxt(gr[i].tot,gr[i].n<hs.length,gr[i].par):'',d:gr[i].n?gr[i].tot-gr[i].par:999}));
+      $('sum-'+t.id).textContent='Total '+(S.mode==='flight'?'du flight':'équipe')+' : '+teamTot+' points'+(S.format==='stableford'&&gN?' · '+brutTxt(gTot,gPart,gPar):'');
+      if(S.mode==='flight'&&S.format==='stableford')info.rows.forEach((r,i)=>rank.push({n:r.p.name,pts:pt[i],extra:gr[i].n?brutTxt(gr[i].tot,gr[i].n<hs.length,gr[i].par):''}));else rank.push({n:t.name,pts:teamTot,extra:S.format==='stableford'&&gN?brutTxt(gTot,gPart,gPar):''});
     }else if(f.k==='team'){
       const a=holeArr(info.teamPH);let tot=0,gs=0,np=0;
       hs.forEach((x,j)=>{const g=parseScore(scoreOf(t.id,'T',x)),p=stabPts(g,parOf(x),a[j]);setT('pp-'+t.id+'-T-'+x,p);if(p!=null)tot+=p;if(typeof g==='number'){gs+=g;np++;}});
@@ -547,6 +557,7 @@ function updateScores(){
     }
   });
   rank.sort((a,b)=>b.pts-a.pts);
+  IND.sort((a,b)=>b.pts-a.pts||a.d-b.d);{const cmp=(a,b)=>a.d-b.d||a.tot-b.tot;GRL.sort(cmp);GRT.sort(cmp);LASTGROSS=GRL.slice();LASTGROSST=GRT.slice();}LASTINDIV=IND.map(r=>({n:r.n,team:r.team,pts:r.pts,extra:r.extra}));
   LASTRANK=rank.map(r=>({n:r.n,pts:r.pts,extra:r.extra||''}));
   paintScores();
   const rk=$('rank');if(rk)rk.innerHTML=rank.length>1||f.k==='wolf'?'<div class="lbl">Classement</div>'+rank.map((r,i)=>'<div><span>'+(i+1)+'. '+esc(r.n)+'</span><span><b>'+r.pts+' pts</b>'+(r.extra?' · '+r.extra:'')+'</span></div>').join(''):'';
@@ -556,7 +567,7 @@ function updateScores(){
 const uid2=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const clone=o=>JSON.parse(JSON.stringify(o));
 const LSK={players:'tournette-players-v1',games:'tournette-games-v1'};
-let DBH=null,LASTRANK=[],toastT=null,gEdit={},gConf={},UI={roster:false,games:false};
+let DBH=null,LASTRANK=[],LASTEFF={},LASTINDIV=[],LASTGROSS=[],LASTGROSST=[],toastT=null,gEdit={},gConf={},UI={roster:false,games:false};
 const dirty={r:false,g:false};
 function toast(m){const e=$('toast');if(!e)return;e.textContent=m;e.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{e.hidden=true;},3800);}
 const Store={mode:'local',status:'loading',players:[],games:[],q:Promise.resolve(),
@@ -763,7 +774,7 @@ function handleStoreChange(el){
 /* ---- partage du résultat ---- */
 const curDoc=()=>{
   const ids=new Set(AT().map(t=>t.id)),sc={};Object.keys(S.scores).forEach(k=>{if(ids.has(k.split(':')[0])&&S.scores[k]!==''&&S.scores[k]!=null)sc[k]=S.scores[k];});
-  return{mode:S.mode,course:S.course,loop:S.loop,strokes:S.strokes,format:S.format,cfg:clone(S.cfg),flight:S.mode==='flight'?clone(S.flight):null,teams:S.mode==='teams'?clone(S.teams):null,scores:sc,result:clone(LASTRANK),hasScores:Object.keys(sc).length>0};
+  return{mode:S.mode,course:S.course,loop:S.loop,strokes:S.strokes,format:S.format,cfg:clone(S.cfg),flight:S.mode==='flight'?clone(S.flight):null,teams:S.mode==='teams'?clone(S.teams):null,scores:sc,result:clone(LASTRANK),eff:clone(LASTEFF),indiv:clone(LASTINDIV),gross:clone(LASTGROSS),grossT:clone(LASTGROSST),hasScores:Object.keys(sc).length>0};
 };
 function modelOf(d){
   const gs=d.mode==='flight'?[d.flight]:(d.teams||[]);
@@ -774,16 +785,23 @@ function modelOf(d){
   const holes=hs.map(x=>({n:x+1,par:H.par[x]}));
   (gs||[]).filter(Boolean).forEach(t=>{
     const keys=f&&f.k==='team'?[{id:'T',n:t.name}]:(t.players||[]).map(q=>({id:q.id,n:q.name||''}));
-    const rows=keys.map(k=>({n:k.n,v:hs.map(x=>parseScore((d.scores||{})[t.id+':'+k.id+':'+x]))})).filter(r=>r.v.some(v=>v!=null));
+    const rows=keys.map(k=>({n:k.n,v:hs.map(x=>parseScore((d.scores||{})[t.id+':'+k.id+':'+x])),eff:(d.eff||{})[t.id+':'+k.id]})).filter(r=>r.v.some(v=>v!=null));
     if(rows.length)cards.push({name:t.name,rows});
   });
   return{holes,cards,date:d.date,title:d.title||'',comment:d.comment||'',fmt:f?f.n:d.format,course:COURSE_N[d.course]||'',loop:LOOP_N[d.loop]||'',strokes:!!d.strokes,mode:d.mode,groups,
-    result:(d.hasScores&&d.result)?d.result:[],hasScores:!!d.hasScores};
+    result:(d.hasScores&&d.result)?d.result:[],indiv:(d.mode==='teams'&&d.hasScores&&d.indiv&&d.indiv.length>1)?d.indiv:[],showIndiv:d.showIndiv!==false,gross:(d.hasScores&&d.gross&&d.gross.length>1)?d.gross:[],grossT:(d.mode==='teams'&&d.hasScores&&d.grossT&&d.grossT.length>1)?d.grossT:[],hasNet:!!d.strokes,showGross:d.showGross!==false,hasScores:!!d.hasScores};
 }
 function shareText(m){
   let t='⛳ Golf Château de la Tournette — '+fmtDate(m.date)+'\n'+(m.title?m.title+'\n':'')+m.fmt+' · Parcours '+m.course.toLowerCase()+' · '+m.loop+' · '+(m.strokes?'avec coups rendus':'en brut')+'\n';
   if(m.result.length){t+='\nClassement\n'+m.result.map((r,i)=>(i+1)+'. '+r.n+' — '+r.pts+' pts'+(r.extra?' ('+r.extra+')':'')).join('\n')+'\n';}
   else t+='\nAucun score saisi.\n';
+  if(m.indiv&&m.indiv.length&&m.showIndiv){t+='\nClassement individuel\n'+m.indiv.map((r,i)=>(i+1)+'. '+r.n+' ('+r.team+') — '+r.pts+' pts'+(r.extra?' ('+r.extra+')':'')).join('\n')+'\n';}
+  if(m.showGross&&((m.gross&&m.gross.length)||(m.grossT&&m.grossT.length))){
+    const FG=(r,i)=>(i+1)+'. '+r.n+(r.team?' ('+r.team+')':'')+' — '+r.tot+' ('+(r.d>0?'+':'')+r.d+')'+(r.part?' *':''),FN=(r,i)=>(i+1)+'. '+r.n+(r.team?' ('+r.team+')':'')+' — '+r.net+' ('+(r.dn>0?'+':'')+r.dn+')'+(r.part?' *':''),nets=l=>(l||[]).slice().sort((a,b)=>a.dn-b.dn||a.net-b.net);
+    const blk=(title,l)=>{if(!l||!l.length)return;t+='\n'+title+'\n'+l.map(FG).join('\n')+'\n';if(m.hasNet)t+='\n'+title.replace('brut','net')+'\n'+nets(l).map(FN).join('\n')+'\n';};
+    blk('Classement brut — équipes',m.grossT);blk('Classement brut — joueurs',m.gross);
+    if((m.gross||[]).concat(m.grossT||[]).some(r=>r.part))t+='* partie incomplète\n';
+  }
   if(m.comment)t+='\n'+m.comment+'\n';
   return t.trim();
 }
@@ -830,21 +848,61 @@ function drawShare(ctx,m){
   const label=t=>{y+=34;ctx.fillStyle=ACC;ctx.font='700 24px '+SAN;try{ctx.letterSpacing='3px';}catch(e){}ctx.fillText(t.toUpperCase(),X,y);try{ctx.letterSpacing='0px';}catch(e){}y+=20;};
   const rr=(x,yy,w,h,r)=>{ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,yy,w,h,r);else ctx.rect(x,yy,w,h);};
   // classement
-  label('Classement');
-  if(m.result.length){
+  const rankRows=(rows)=>{
     const medal=['#f2c230','#b9c0c6','#c98a5a'];
-    m.result.forEach((r,i)=>{
+    rows.forEach((r,i)=>{
       ctx.fillStyle=i===0?'#fdeacb':'#f3ecda';rr(X,y,CW,74,14);ctx.fill();
       ctx.fillStyle=medal[i]||'#d9d2bd';ctx.beginPath();ctx.arc(X+40,y+37,24,0,7);ctx.fill();
       ctx.fillStyle=INK;ctx.font='700 26px '+SAN;ctx.textAlign='center';ctx.fillText(String(i+1),X+40,y+46);ctx.textAlign='left';
       ctx.font='600 32px '+SAN;let nm=r.n;const maxN=CW-300;while(ctx.measureText(nm).width>maxN&&nm.length>3)nm=nm.slice(0,-2);if(nm!==r.n)nm+='…';
       ctx.fillStyle=INK;ctx.fillText(nm,X+84,y+(r.extra?36:47));
-      if(r.extra){ctx.fillStyle=MUT;ctx.font='400 22px '+SAN;ctx.fillText(r.extra,X+84,y+62);}
+      if(r.extra){ctx.fillStyle=MUT;ctx.font='400 22px '+SAN;let ex=r.extra;while(ctx.measureText(ex).width>CW-300&&ex.length>3)ex=ex.slice(0,-2);if(ex!==r.extra)ex+='…';ctx.fillText(ex,X+84,y+62);}
       ctx.textAlign='right';ctx.fillStyle=HOT;ctx.font='700 38px '+SAN;ctx.fillText(r.pts+' pts',X+CW-24,y+48);ctx.textAlign='left';
       y+=86;
     });
     y-=12;
-  }else{ctx.fillStyle=MUT;ctx.font='italic 400 28px '+SAN;ctx.fillText('Aucun score saisi pour le moment.',X,y+20);y+=30;}
+  };
+  label(m.mode==='teams'?'Classement par équipe':'Classement');
+  if(m.result.length)rankRows(m.result);
+  else{ctx.fillStyle=MUT;ctx.font='italic 400 28px '+SAN;ctx.fillText('Aucun score saisi pour le moment.',X,y+20);y+=30;}
+  if(m.indiv&&m.indiv.length&&m.showIndiv){label('Classement individuel');rankRows(m.indiv.map(r=>({n:r.n,pts:r.pts,extra:r.team+(r.extra?' · '+r.extra:'')})));}
+  if(m.showGross&&((m.gross&&m.gross.length)||(m.grossT&&m.grossT.length))){
+    label(m.hasNet?'Classements brut et net':'Classement brut');
+    let anyP=false;
+    const medal=['#f2c230','#b9c0c6','#c98a5a'],GAP=24,colW=(CW-GAP)/2;
+    const drawCol=(list,x0,y0,net,r0)=>{
+      r0=r0||0;list.forEach((r,kk)=>{
+        const k=kk+r0,ry=y0+kk*66,v=net?r.net:r.tot,dd=net?r.dn:r.d;
+        ctx.fillStyle=k===0?'#fdeacb':'#f3ecda';rr(x0,ry,colW,58,12);ctx.fill();
+        ctx.fillStyle=medal[k]||'#d9d2bd';ctx.beginPath();ctx.arc(x0+32,ry+29,18,0,7);ctx.fill();
+        ctx.fillStyle=INK;ctx.font='700 21px '+SAN;ctx.textAlign='center';ctx.fillText(String(k+1),x0+32,ry+37);ctx.textAlign='left';
+        const val=v+' ('+(dd>0?'+':'')+dd+')'+(r.part?' *':'');if(r.part)anyP=true;
+        ctx.font='700 27px '+SAN;const vw=ctx.measureText(val).width;
+        ctx.font='600 25px '+SAN;let nm=r.n;const maxN=colW-64-vw-24;while(ctx.measureText(nm).width>maxN&&nm.length>3)nm=nm.slice(0,-2);if(nm!==r.n)nm+='…';
+        ctx.fillStyle=INK;ctx.fillText(nm,x0+62,ry+(r.team?27:37));
+        if(r.team){ctx.fillStyle=MUT;ctx.font='400 18px '+SAN;let tm=r.team;while(ctx.measureText(tm).width>maxN&&tm.length>3)tm=tm.slice(0,-2);if(tm!==r.team)tm+='…';ctx.fillText(tm,x0+62,ry+48);}
+        ctx.textAlign='right';ctx.fillStyle=HOT;ctx.font='700 27px '+SAN;ctx.fillText(val,x0+colW-16,ry+38);ctx.textAlign='left';
+      });
+    };
+    const block=(title,gl)=>{
+      y+=30;ctx.fillStyle=INK;ctx.font='700 26px '+SAN;ctx.fillText(title,X,y);y+=14;
+      const y0=y;
+      if(m.hasNet){
+        const nl=gl.slice().sort((a,b)=>a.dn-b.dn||a.net-b.net);
+        ctx.fillStyle=MUT;ctx.font='700 20px '+SAN;try{ctx.letterSpacing='2px';}catch(e){}
+        ctx.fillText('BRUT',X+4,y0+16);ctx.fillText('NET',X+colW+GAP+4,y0+16);try{ctx.letterSpacing='0px';}catch(e){}
+        drawCol(gl,X,y0+26,false);drawCol(nl,X+colW+GAP,y0+26,true);
+        y=y0+26+gl.length*66-8;
+      }else{
+        const half=Math.ceil(gl.length/2);
+        drawCol(gl.slice(0,half),X,y0,false,0);drawCol(gl.slice(half),X+colW+GAP,y0,false,half);
+        y=y0+half*66-8;
+      }
+    };
+    if(m.grossT&&m.grossT.length)block('Équipes',m.grossT);
+    if(m.gross&&m.gross.length)block(m.grossT&&m.grossT.length?'Joueurs':'Joueurs',m.gross);
+    if(anyP){ctx.fillStyle=MUT;ctx.font='italic 400 20px '+SAN;ctx.fillText('* partie incomplète : écart calculé sur les trous joués',X,y+26);y+=34;}
+  }
   // joueurs
   label('Joueurs');
   m.groups.forEach(gr=>{
@@ -885,7 +943,7 @@ function drawShare(ctx,m){
         cd.rows.forEach(r=>{
           const cy=y+30;ctx.fillStyle=INK;ctx.font='600 24px '+SAN;let nm=r.n;while(ctx.measureText(nm).width>NW-16&&nm.length>3)nm=nm.slice(0,-2);if(nm!==r.n)nm+='…';ctx.fillText(nm,X+14,cy+8);
           let tot=0,any=false;
-          seg.forEach((h,i)=>{const gv=r.v[s0+i];cell(X+NW+cw*i+cw/2,cy,gv,h.par);if(typeof gv==='number'){tot+=gv;any=true;}});
+          seg.forEach((h,i)=>{const gv=r.v[s0+i];cell(X+NW+cw*i+cw/2,cy,gv,h.par);const e=r.eff?r.eff[s0+i]:(typeof gv==='number'?gv:null);if(typeof e==='number'){tot+=e;any=true;}});
           ctx.fillStyle=HOT;ctx.font='700 26px '+SAN;ctx.textAlign='center';if(any)ctx.fillText(String(tot),X+CW-TW/2,cy+8);ctx.textAlign='left';
           ctx.strokeStyle='#e6dec9';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(X,y+60);ctx.lineTo(X+CW,y+60);ctx.stroke();
           y+=60;
@@ -930,7 +988,7 @@ async function openShare(m){
   const sub=encodeURIComponent('Tournette — '+(m.title||'résultat de la partie')+' ('+m.date+')'),body=encodeURIComponent(mine.text);
   box.innerHTML='<div class="shbox" role="dialog" aria-modal="true" aria-label="Partager le résultat">'+head+
    (mine.url?'<img class="shimg" src="'+mine.url+'" alt="Visuel du résultat de la partie">':'<p class="note">Le visuel n’a pas pu être généré. Le texte reste disponible.</p>')+
-   '<div class="row"><button class="btn pri" data-act="sh-native">Partager…</button>'+(mine.url?'<button class="btn" data-act="sh-save">Enregistrer l’image</button>':'')+
+   (mine.m.indiv&&mine.m.indiv.length?'<label class="ok" style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" data-shi="1"'+(mine.m.showIndiv?' checked':'')+'> Inclure le classement individuel</label>':'')+((mine.m.gross&&mine.m.gross.length)||(mine.m.grossT&&mine.m.grossT.length)?'<label class="ok" style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" data-shg="1"'+(mine.m.showGross?' checked':'')+'> Inclure le classement brut'+(mine.m.hasNet?' et net':'')+' (équipes et joueurs, en 2 colonnes)</label>':'')+'<div class="row"><button class="btn pri" data-act="sh-native">Partager…</button>'+(mine.url?'<button class="btn" data-act="sh-save">Enregistrer l’image</button>':'')+
    '<a class="btn" href="https://wa.me/?text='+body+'" target="_blank" rel="noopener">WhatsApp</a><a class="btn" href="mailto:?subject='+sub+'&body='+body+'">E-mail</a><button class="btn" data-act="sh-copy">Copier le texte</button></div>'+
    '<textarea id="sh-text" rows="6" readonly aria-label="Texte du résultat">'+esc(mine.text)+'</textarea>'+
    '<p class="ok" style="margin:0">« Partager… » envoie l’image directement vers vos applications (messagerie, réseaux sociaux, e-mail) depuis l’application installée. Sinon, enregistrez l’image (ou appuyez longuement dessus) puis joignez-la ; WhatsApp et e-mail transmettent le texte, pas l’image.</p></div>';
@@ -954,6 +1012,7 @@ async function shCopy(){
   try{await navigator.clipboard.writeText(SH.text);toast('Texte copié.');}
   catch(e){const t=$('sh-text');if(t){t.select();let ok=false;try{ok=document.execCommand('copy');}catch(x){}toast(ok?'Texte copié.':'Sélectionnez le texte pour le copier.');}}
 }
+document.addEventListener('change',e=>{const el=e.target;if(el&&el.dataset&&(el.dataset.shi||el.dataset.shg)&&SH){const m=SH.m;if(el.dataset.shi)m.showIndiv=el.checked;else m.showGross=el.checked;openShare(m);}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){const b=$('shm');if(b&&!b.hidden)closeShare();}});
 
 /* ---- événements ---- */
@@ -1010,6 +1069,10 @@ new MutationObserver(decorate).observe(document.getElementById('app'),{childList
 renderAll();decorate();
 Store.init();
 </script>
+
+
+
+
 
 
 
