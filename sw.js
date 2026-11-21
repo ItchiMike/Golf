@@ -1,5 +1,5 @@
 /* Service worker : l'application fonctionne hors ligne après la première ouverture. */
-const CACHE = 'tournette-v15';
+const CACHE = 'tournette-v17';
 const FONTS = 'tournette-fonts';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 

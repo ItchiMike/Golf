@@ -127,6 +127,13 @@ thead th{font-size:11px;color:var(--muted);font-weight:600}
 .ex{background:var(--soft);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 .ex p{margin:0}
 .rank{display:flex;flex-direction:column;gap:4px}
+.sc-lay,.sc-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+@media (min-width:760px){
+ .wrap{max-width:1180px}
+ .sc-lay{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+ .sc-side{order:2;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg)}
+ .sc-main{order:1}
+}
 .rank div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:4px 0}
 .tcard{display:flex;flex-direction:column;gap:8px}
 details summary{cursor:pointer;font-weight:600}
@@ -228,7 +235,7 @@ const FM={
  foursome:{n:'Foursome (coups alternés)',k:'team',d:'Deux joueurs, une seule balle jouée en alternance.',min:2,max:2},
  wolf:{n:'Wolf (Loup)',k:'wolf',d:'3 ou 4 joueurs : le Loup choisit un partenaire ou joue seul.',min:3,max:4}
 };
-const DEF_CFG=()=>({stableford:{pct:95,pat:'all'},fourball:{pct:85,pat:'1'},shamble:{pct:85,pat:'1'},bestworst:{pct:85,nb:1,nw:1},
+const DEF_CFG=()=>({stableford:{pct:100,pat:'all'},fourball:{pct:85,pat:'1'},shamble:{pct:85,pat:'1'},bestworst:{pct:85,nb:1,nw:1},
  scramble:{w2:'35,15',w3:'30,20,10',w4:'25,20,15,10',drives:0},greensome:{w2:'60,40'},foursome:{w2:'50,50'},
  wolf:{pct:100,win2:2,lone:4,loseEach:1,blind:2}});
 /* Cartes de score du club (février 2026) : par et index (SI) de chaque trou */
@@ -470,7 +477,7 @@ function rRules(){
 let SC_CONF=false;
 function rCard(){
   const hs=LH[S.loop],H=HO(S.course),f=FM[S.format];
-  let h='<h2>Carte de score</h2><div class="rank" id="rank"></div><div class="legend" aria-label="Légende des scores"><span class="lg"><i class="s-eagle">2</i>Eagle ou mieux (−2)</span><span class="lg"><i class="s-birdie">3</i>Birdie (−1)</span><span class="lg"><i>4</i>Par</span><span class="lg"><i class="s-bogey">5</i>Bogey (+1)</span><span class="lg"><i class="s-dbl">6</i>Double bogey ou pire (+2)</span></div>';
+  let h='<h2>Carte de score</h2><div class="sc-lay"><div class="sc-side"><div class="rank" id="rank"></div></div><div class="sc-main"><div class="legend" aria-label="Légende des scores"><span class="lg"><i class="s-eagle">2</i>Eagle ou mieux (−2)</span><span class="lg"><i class="s-birdie">3</i>Birdie (−1)</span><span class="lg"><i>4</i>Par</span><span class="lg"><i class="s-bogey">5</i>Bogey (+1)</span><span class="lg"><i class="s-dbl">6</i>Double bogey ou pire (+2)</span></div>';
   h+='<div class="row">'+(SC_CONF?'<span class="ok">Effacer tous les scores saisis ?</span><button class="btn x" data-act="sc-clearc">Oui, effacer</button><button class="btn" data-act="sc-cancel">Annuler</button>':'<button class="btn x" data-act="sc-clear">Effacer les scores</button>')+'</div>';
   h+='<details><summary>Pars et index des trous</summary><p class="ok" style="margin:8px 0">Valeurs de la carte de score du parcours '+COURSE_N[S.course]+'. L’index (SI) place les coups rendus : le trou 1 reçoit le premier coup. Modifiable si le club change sa carte.</p><div class="scroll"><table><thead><tr><th>Trou</th>'+hs.map(x=>'<th>'+(x+1)+'</th>').join('')+'</tr></thead><tbody><tr><td>Par</td>'+hs.map(x=>'<td><input data-hp="par" data-h="'+x+'" value="'+H.par[x]+'" style="width:40px;text-align:center"></td>').join('')+'</tr><tr><td>Index</td>'+hs.map(x=>'<td><input data-hp="si" data-h="'+x+'" value="'+H.si[x]+'" style="width:40px;text-align:center"></td>').join('')+'</tr></tbody></table></div></details>';
   const hd='<thead><tr><th>Trou</th>'+hs.map(x=>'<th>'+(x+1)+'</th>').join('')+'<th>Total</th></tr><tr><th>Par</th>'+hs.map(x=>'<th>'+H.par[x]+'</th>').join('')+'<th>'+sum(hs.map(x=>H.par[x]))+'</th></tr><tr><th>Index</th>'+hs.map(x=>'<th>'+H.si[x]+'</th>').join('')+'<th></th></tr></thead>';
@@ -489,6 +496,7 @@ function rCard(){
     }
     h+='<div class="scroll"><table class="sc">'+hd+'<tbody>'+body+'</tbody></table></div><div class="ok" id="sum-'+t.id+'"></div></div>';
   });
+  h+='</div></div>';
   $('s-card').innerHTML=h;
 }
 function paintScores(){
@@ -629,6 +637,8 @@ document.addEventListener('focusout',()=>setTimeout(()=>{
   if(dirty.g&&!insideActive('games-list')){dirty.g=false;rGames();}
 },0));
 const sortedPlayers=()=>Store.players.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'fr'));
+function focusNewName(){setTimeout(()=>{const l=[...document.querySelectorAll('input[data-f="name"]')].filter(i=>i.value==='Nouveau joueur').pop();if(l){try{l.scrollIntoView({block:'center'});l.focus();l.select();}catch(x){}}},30);}
+function focusNewRoster(){let n=0;const t=setInterval(()=>{n++;const a=document.activeElement;if(n>1&&a&&a.dataset&&a.dataset.rf==='name'&&a.value==='Nouveau joueur'){}else if(a&&a!==document.body&&n>1&&!(a.dataset&&a.dataset.rf==='name')){clearInterval(t);return;}const l=[...document.querySelectorAll('input[data-rf="name"]')].filter(x=>x.value==='Nouveau joueur').pop();if(l&&a!==l){try{l.scrollIntoView({block:'center'});l.focus();l.select();}catch(x){}}if(n>20)clearInterval(t);},60);}
 function savedOptions(){return'<option value="">Joueur enregistré…</option>'+sortedPlayers().map(r=>'<option value="'+esc(r.id)+'">'+esc(r.name)+' · '+esc(TEES[r.tee]||'')+(r.hi?' · '+esc(r.hi):'')+'</option>').join('');}
 function updRCH(r){const el=$('rch-'+r.id);if(!el)return;const rt=rating(S.course,S.loop,r.tee,r.sex),ch=courseHcp(parseHI(r.hi),rt,S.loop);
   el.innerHTML=ch==null?'<span style="color:var(--bad)" title="'+(rt?'Index invalide':'Pas de table pour ce départ')+'">—</span>':teeChip(r.tee)+'HCP '+(ch<0?'+'+(-ch):ch)+(rt&&rt.est?' *':'');}
@@ -732,7 +742,7 @@ function handleStoreAct(act,b){
   if(act==='sh-native'){shNative();return true;}
   if(act==='sh-save'){shSave();return true;}
   if(act==='sh-copy'){shCopy();return true;}
-  if(act==='r-new'){Store.put('players',{id:'p'+uid2(),name:'Nouveau joueur',sex:'M',tee:'Y',hi:'',updated:new Date().toISOString()});return true;}
+  if(act==='r-new'){Store.put('players',{id:'p'+uid2(),name:'Nouveau joueur',sex:'M',tee:'Y',hi:'',updated:new Date().toISOString()});focusNewRoster();return true;}
   if(act==='r-del'){const r=b.closest('[data-r]');Store.del('players',r.dataset.r).then(ok=>{if(ok)toast('Joueur retiré de la liste.');});return true;}
   if(act==='g-save'){
     if(!AT().some(t=>t.players.length)){toast('Ajoutez au moins un joueur avant de sauvegarder.');return true;}
@@ -1029,9 +1039,9 @@ app.addEventListener('click',e=>{
   else if(act==='loop'){S.loop=v;rCourse();rPlayers();rRoster();rDerived();}
   else if(act==='strokes'){S.strokes=v==='1';rCourse();rDerived();}
   else if(act==='format'){S.format=v;rFormat();rPlayers();rDerived();}
-  else if(act==='addt'){S.teams.push({id:uid(),name:'Équipe '+String.fromCharCode(65+S.teams.length%26),players:[mkPlayer('Joueur 1','M','W','')]});rPlayers();rDerived();}
+  else if(act==='addt'){S.teams.push({id:uid(),name:'Équipe '+String.fromCharCode(65+S.teams.length%26),players:[mkPlayer('Nouveau joueur','M','W','')]});rPlayers();rDerived();focusNewName();}
   else if(act==='delt'&&t){S.teams=S.teams.filter(x=>x!==t);rPlayers();rDerived();}
-  else if(act==='addp'&&t){if(S.mode==='flight'&&t.players.length>=4)return;t.players.push(mkPlayer('Joueur '+(t.players.length+1),'M','Y',''));rPlayers();rDerived();}
+  else if(act==='addp'&&t){if(S.mode==='flight'&&t.players.length>=4)return;t.players.push(mkPlayer('Nouveau joueur','M','Y',''));rPlayers();rDerived();focusNewName();}
   else if(act==='delp'&&t){const pid=b.closest('[data-p]').dataset.p;t.players=t.players.filter(p=>p.id!==pid);rPlayers();rDerived();}
   else if(act==='sc-clear'){SC_CONF=true;rCard();updateScores();}
   else if(act==='sc-cancel'){SC_CONF=false;rCard();updateScores();}
@@ -1070,6 +1080,8 @@ new MutationObserver(decorate).observe(document.getElementById('app'),{childList
 renderAll();decorate();
 Store.init();
 </script>
+
+
 
 
 
