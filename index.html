@@ -858,7 +858,7 @@ function wrapT(ctx,text,maxW){
     out.push(line);});
   return out;
 }
-function drawShare(ctx,m){
+function drawShare(ctx,m,part){
   const W=1080,H=ctx.canvas.height/(ctx.getTransform().d||1),SER='"Playfair Display",Georgia,serif',SAN='Inter,system-ui,sans-serif';
   const INK='#1d2a21',MUT='#55645a',HOT='#b4481f',ACC='#3d6a2a';
   ctx.fillStyle='#fbf6ea';ctx.fillRect(0,0,W,H);
@@ -899,6 +899,7 @@ function drawShare(ctx,m){
     if(im){ctx.clip();ctx.drawImage(im,cx-rad,cy-rad,rad*2,rad*2);ctx.restore();ctx.strokeStyle='#fbf6ea';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,rad,0,7);ctx.stroke();}
     else{ctx.fillStyle=avColor(n);ctx.fill();ctx.restore();ctx.fillStyle='#fff';ctx.font='700 '+Math.round(rad*.85)+'px '+SAN;ctx.textAlign='center';ctx.fillText(initials(n),cx,cy+rad*.3);ctx.textAlign='left';}};
   const rr=(x,yy,w,h,r)=>{ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,yy,w,h,r);else ctx.rect(x,yy,w,h);};
+  if(part!=='cards'){
   // classement
   const rankRows=(rows)=>{
     const medal=['#f2c230','#b9c0c6','#c98a5a'];const hp=rows.some(r=>isP(r.n)),NX=hp?136:84;
@@ -967,8 +968,9 @@ function drawShare(ctx,m){
     });
     y+=6;
   });
+  }
   // cartes de score
-  if(m.hasScores&&m.cards&&m.cards.length){
+  if(part!=='recap'&&m.hasScores&&m.cards&&m.cards.length){
     label('Cartes de score');
     const ST={e:['#f6c945','#3b2a00','#b98a00'],b:['#cde8bd','#1d4a10','#5d9b3f'],o:['#fbd9c4','#7a2f0c','#d98a5f'],d:['#f0a78f','#561203','#b4481f']};
     const NW=190,TW=100,cw=(CW-NW-TW)/9;
@@ -1008,7 +1010,7 @@ function drawShare(ctx,m){
     y-=10;
   }
   // commentaire
-  if(m.comment){
+  if(part!=='cards'&&m.comment){
     label('Commentaire');
     ctx.fillStyle=INK;ctx.font='italic 400 28px '+SAN;
     let L=wrapT(ctx,m.comment,CW);if(L.length>9){L=L.slice(0,9);L[8]=L[8].replace(/.{0,2}$/,'')+'…';}
@@ -1020,46 +1022,52 @@ function drawShare(ctx,m){
   ctx.fillStyle='#fbf6ea';ctx.textAlign='center';ctx.font='700 34px '+SER;ctx.fillText('The Gentlemen’s Golf Club',W/2,fy+78);ctx.textAlign='left';
   return fy+120;
 }
-async function renderShare(m){
+async function renderShare(m,part){
   try{await Promise.all([document.fonts.load('700 56px "Playfair Display"'),document.fonts.load('600 30px Inter'),document.fonts.load('400 27px Inter')]);}catch(e){}
   try{await Promise.all(Object.values(m.ph||{}).filter(u=>!PHIMG[u]).map(u=>new Promise(r=>{const i=new Image();i.onload=()=>{PHIMG[u]=i;r();};i.onerror=r;i.src=u;})));}catch(e){}
   const c0=document.createElement('canvas');c0.width=1080;c0.height=7000;
-  const H=Math.ceil(drawShare(c0.getContext('2d'),m));
-  const K=Math.max(1,Math.min(2,Math.sqrt(14e6/(1080*H))));
-  const c=document.createElement('canvas');c.width=Math.round(1080*K);c.height=Math.round(H*K);const cx=c.getContext('2d');cx.scale(K,K);drawShare(cx,m);
+  const H=Math.ceil(drawShare(c0.getContext('2d'),m,part));
+  const K=Math.max(1,Math.min(3,Math.sqrt(14e6/(1080*H))));
+  const c=document.createElement('canvas');c.width=Math.round(1080*K);c.height=Math.round(H*K);const cx=c.getContext('2d');cx.scale(K,K);drawShare(cx,m,part);
   return await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('blob')),'image/png'));
 }
 let SH=null;
 const shFile=()=>'tournette-'+((SH&&SH.m.date)||todayStr())+'.png';
-function closeShare(){const b=$('shm');if(b)b.hidden=true;if(SH&&SH.url)try{URL.revokeObjectURL(SH.url);}catch(e){}SH=null;}
+const shFile2=()=>'tournette-'+((SH&&SH.m.date)||todayStr())+'-cartes.png';
+function closeShare(){const b=$('shm');if(b)b.hidden=true;if(SH){try{if(SH.url)URL.revokeObjectURL(SH.url);if(SH.url2)URL.revokeObjectURL(SH.url2);}catch(e){}}SH=null;}
 async function openShare(m){
-  const box=$('shm');if(SH&&SH.url)try{URL.revokeObjectURL(SH.url);}catch(e){}
-  SH={m,text:shareText(m),blob:null,url:''};const mine=SH;
+  const box=$('shm');if(SH)try{if(SH.url)URL.revokeObjectURL(SH.url);if(SH.url2)URL.revokeObjectURL(SH.url2);}catch(e){}
+  SH={m,text:shareText(m),blob:null,url:'',blob2:null,url2:''};const mine=SH;
   const head='<div class="shh"><b>Partager le résultat</b><button class="btn" data-act="sh-close" aria-label="Fermer">×</button></div>';
   box.hidden=false;box.innerHTML='<div class="shbox" role="dialog" aria-modal="true" aria-label="Partager le résultat">'+head+'<p class="ok" style="margin:0">Préparation du visuel…</p></div>';
-  try{mine.blob=await renderShare(m);mine.url=URL.createObjectURL(mine.blob);}catch(e){mine.blob=null;}
+  try{mine.blob=await renderShare(m,'recap');mine.url=URL.createObjectURL(mine.blob);}catch(e){mine.blob=null;}
+  try{if(m.hasScores&&m.cards&&m.cards.length){mine.blob2=await renderShare(m,'cards');mine.url2=URL.createObjectURL(mine.blob2);}}catch(e){mine.blob2=null;mine.url2='';}
   if(SH!==mine)return;
   const sub=encodeURIComponent('Tournette — '+(m.title||'résultat de la partie')+' ('+m.date+')'),body=encodeURIComponent(mine.text);
   box.innerHTML='<div class="shbox" role="dialog" aria-modal="true" aria-label="Partager le résultat">'+head+
-   (mine.url?'<img class="shimg" src="'+mine.url+'" alt="Visuel du résultat de la partie">':'<p class="note">Le visuel n’a pas pu être généré. Le texte reste disponible.</p>')+
-   (mine.m.indiv&&mine.m.indiv.length?'<label class="ok" style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" data-shi="1"'+(mine.m.showIndiv?' checked':'')+'> Inclure le classement individuel</label>':'')+((mine.m.gross&&mine.m.gross.length)||(mine.m.grossT&&mine.m.grossT.length)?'<label class="ok" style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" data-shg="1"'+(mine.m.showGross?' checked':'')+'> Inclure le classement brut'+(mine.m.hasNet?' et net':'')+' (équipes et joueurs, en 2 colonnes)</label>':'')+'<div class="row"><button class="btn pri" data-act="sh-native">Partager…</button>'+(mine.url?'<button class="btn" data-act="sh-save">Enregistrer l’image</button>':'')+
+   (mine.url?'<img class="shimg" src="'+mine.url+'" alt="Visuel du résultat de la partie">'+(mine.url2?'<img class="shimg" src="'+mine.url2+'" alt="Cartes de score">':''):'<p class="note">Le visuel n’a pas pu être généré. Le texte reste disponible.</p>')+
+   (mine.m.indiv&&mine.m.indiv.length?'<label class="ok" style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" data-shi="1"'+(mine.m.showIndiv?' checked':'')+'> Inclure le classement individuel</label>':'')+((mine.m.gross&&mine.m.gross.length)||(mine.m.grossT&&mine.m.grossT.length)?'<label class="ok" style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" data-shg="1"'+(mine.m.showGross?' checked':'')+'> Inclure le classement brut'+(mine.m.hasNet?' et net':'')+' (équipes et joueurs, en 2 colonnes)</label>':'')+'<div class="row"><button class="btn pri" data-act="sh-native">Partager…</button>'+(mine.url?'<button class="btn" data-act="sh-save">Enregistrer les images</button>':'')+
    '<a class="btn" href="https://wa.me/?text='+body+'" target="_blank" rel="noopener">WhatsApp</a><a class="btn" href="mailto:?subject='+sub+'&body='+body+'">E-mail</a><button class="btn" data-act="sh-copy">Copier le texte</button></div>'+
    '<textarea id="sh-text" rows="6" readonly aria-label="Texte du résultat">'+esc(mine.text)+'</textarea>'+
-   '<p class="ok" style="margin:0">« Partager… » envoie l’image directement vers vos applications (messagerie, réseaux sociaux, e-mail) depuis l’application installée. Sinon, enregistrez l’image (ou appuyez longuement dessus) puis joignez-la ; WhatsApp et e-mail transmettent le texte, pas l’image.</p></div>';
+   '<p class="ok" style="margin:0">« Partager… » envoie l’image directement vers vos applications (messagerie, réseaux sociaux, e-mail) depuis l’application installée. Sinon, enregistrez les images (récap et cartes de score, deux fichiers, ou appuyez longuement sur une image) puis joignez-la ; WhatsApp et e-mail transmettent le texte, pas l’image.</p></div>';
 }
 async function shNative(){
   if(!SH)return;const data={title:SH.m.title||'Résultat de la partie',text:SH.text};
   try{
-    if(SH.blob){const f=new File([SH.blob],shFile(),{type:'image/png'});if(navigator.canShare&&navigator.canShare({files:[f]}))data.files=[f];}
+    if(SH.blob){const fs=[new File([SH.blob],shFile(),{type:'image/png'})];if(SH.blob2)fs.push(new File([SH.blob2],shFile2(),{type:'image/png'}));if(navigator.canShare&&navigator.canShare({files:fs}))data.files=fs;}
     if(!navigator.share)throw new Error('ns');
     await navigator.share(data);
   }catch(e){if(e&&e.name==='AbortError')return;toast('Partage direct indisponible ici : enregistrez l’image ou copiez le texte.');}
 }
 async function shSave(){
-  if(!SH||!SH.blob)return;const name=shFile();let d=null;
+  if(!SH||!SH.blob)return;let d=null;
   try{if(window.claude&&window.claude.use)d=await window.claude.use('downloads');}catch(e){d=null;}
-  if(d){try{await d.save({filename:name,data:SH.blob});toast('Image enregistrée.');}catch(e){if(!e||e.code!=='declined')toast('Enregistrement impossible.');}return;}
-  const a=document.createElement('a');a.href=SH.url;a.download=name;document.body.appendChild(a);a.click();a.remove();toast('Image téléchargée.');
+  const items=[[SH.blob,shFile(),SH.url]];if(SH.blob2)items.push([SH.blob2,shFile2(),SH.url2]);
+  for(const [bl,name,url] of items){
+    if(d){try{await d.save({filename:name,data:bl});}catch(e){if(!e||e.code!=='declined')toast('Enregistrement impossible.');return;}}
+    else{const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();await new Promise(r=>setTimeout(r,400));}
+  }
+  toast(items.length>1?'Images enregistrées (récap et cartes de score).':(d?'Image enregistrée.':'Image téléchargée.'));
 }
 async function shCopy(){
   if(!SH)return;
@@ -1123,6 +1131,7 @@ new MutationObserver(decorate).observe(document.getElementById('app'),{childList
 renderAll();decorate();
 Store.init();
 </script>
+
 
 
 
