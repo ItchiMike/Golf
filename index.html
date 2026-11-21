@@ -859,7 +859,7 @@ function wrapT(ctx,text,maxW){
   return out;
 }
 function drawShare(ctx,m){
-  const W=1080,H=ctx.canvas.height,SER='"Playfair Display",Georgia,serif',SAN='Inter,system-ui,sans-serif';
+  const W=1080,H=ctx.canvas.height/(ctx.getTransform().d||1),SER='"Playfair Display",Georgia,serif',SAN='Inter,system-ui,sans-serif';
   const INK='#1d2a21',MUT='#55645a',HOT='#b4481f',ACC='#3d6a2a';
   ctx.fillStyle='#fbf6ea';ctx.fillRect(0,0,W,H);
   // paysage
@@ -1025,7 +1025,8 @@ async function renderShare(m){
   try{await Promise.all(Object.values(m.ph||{}).filter(u=>!PHIMG[u]).map(u=>new Promise(r=>{const i=new Image();i.onload=()=>{PHIMG[u]=i;r();};i.onerror=r;i.src=u;})));}catch(e){}
   const c0=document.createElement('canvas');c0.width=1080;c0.height=7000;
   const H=Math.ceil(drawShare(c0.getContext('2d'),m));
-  const c=document.createElement('canvas');c.width=1080;c.height=H;drawShare(c.getContext('2d'),m);
+  const K=Math.max(1,Math.min(2,Math.sqrt(14e6/(1080*H))));
+  const c=document.createElement('canvas');c.width=Math.round(1080*K);c.height=Math.round(H*K);const cx=c.getContext('2d');cx.scale(K,K);drawShare(cx,m);
   return await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('blob')),'image/png'));
 }
 let SH=null;
@@ -1122,6 +1123,7 @@ new MutationObserver(decorate).observe(document.getElementById('app'),{childList
 renderAll();decorate();
 Store.init();
 </script>
+
 
 
 
